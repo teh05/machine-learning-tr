@@ -41,6 +41,11 @@ BINUS UNIVERSITY GRADUATE PROGRAM
 |Gambar 7|Distribusi Kelas Machine Failure: Sebelum vs Sesudah SMOTE|Bab 2.2 Pra-Pemrosesan|
 |Gambar 8|KDE Distribusi Fitur Turunan: Power, Strain, dan Temp_diff|Bab 2.2 Feature Engineering|
 |Gambar 9|Flowchart Pipeline Eksperimen Predictive Maintenance|Bab 2.3 Penentuan Model|
+|Gambar 10|Pipeline Anti-Overfit (SMOTE 0.2, val-asli scoring)|Bab 3.0–3.1|
+|Gambar 11|Learning Curves setelah Regularisasi|Bab 3.2|
+|Gambar 12|Confusion Matrices Model Utama vs GB|Bab 3.3|
+|Gambar 16|Perbandingan Multi-Model (Main / Extended / All)|Bab 3.5|
+|Gambar 22|SHAP Summary & Bar — Random Forest|Bab 3.7|
 
 
 
@@ -476,7 +481,7 @@ X_train_scaled = scaler.fit_transform(X_train)  # fit hanya pada training X_val_
 
 Ketidakseimbangan kelas merupakan tantangan terbesar dataset ini rasio ~96.6%:3.4% (Normal:Failure) setara dengan rasio ~28:1. Tanpa penanganan, model akan cenderung selalu memprediksi "Normal" dan tetap mendapatkan _accuracy_ semu ~96%  namun gagal total mendeteksi kegagalan mesin yang justru menjadi tujuan utama penelitian.[11] 
 
-Tiga strategi dikombinasikan sesuai karakteristik masing-masing model:[13] 
+Strategi final (setelah mitigasi overfitting): **SMOTE hanya pada training** dengan `sampling_strategy=0.2` (bukan 0.3). Untuk model tree (RF/XGB/GB) **tidak** digabung dengan `class_weight`/`scale_pos_weight` agresif agar menghindari _double-balancing_ yang menurunkan Precision. Logistic Regression tetap memakai `class_weight='balanced'` (+ polynomial features) karena dilatih pada data asli tanpa SMOTE.[13] 
 
 # Block 9 — Preprocessing: Splitting + SMOTE 
 
@@ -502,9 +507,10 @@ print(f"Distribusi kelas Train sebelum SMOTE:\n{y_train.value_counts()}") # Outp
 
 # Terapkan SMOTE hanya pada training set 
 
-smote = SMOTE(random_state=42, k_neighbors=5, sampling_strategy=0.3) X_res, y_res = smote.fit_resample(X_train, y_train) 
+smote = SMOTE(random_state=42, k_neighbors=5, sampling_strategy=0.2) X_res, y_res = smote.fit_resample(X_train, y_train) 
 
-print(f"Distribusi kelas Train sesudah SMOTE:\n{pd.Series(y_res).value_counts()}") # Output: 0: 6763, 1: 2028 
+print(f"Distribusi kelas Train sesudah SMOTE:\n{pd.Series(y_res).value_counts()}") # Output: 0: 6763, 1: 1352
+# Alasan 0.2 (bukan 0.3/1.0): rasio lebih tinggi menambah sampel sintetis → Precision turun (false alarm naik). Sensitivitas RF membuktikan F1 terbaik di 0.2. 
 
 # Visualisasi perbandingan fig, axes = plt.subplots(1, 2, figsize=(10, 4)) 
 
@@ -544,7 +550,7 @@ Gambar 9 berikut menyajikan diagram alur ( _flowchart_ ) keseluruhan pipeline ek
 
 
 <!-- Start of picture text -->
-1. Data Collection<br>AI4I 2020 - 10.000 x 14- CC<br>BY 4.0<br>2. EDA<br>Deskriptif + Distribusi<br>failure - Histogram/KDE<br>Boxplot - Korelasi - Scatter<br>zona gagal<br>3. Pra-Pemrosesan<br>Drop UID & Product ID -<br>Power, Strain, Temp_diff<br>IQR + Winsorization - Type:<br>L/M/H > 0/1/2<br>4, Standardisasi<br>StandardScaler (Z-score)<br>Hanya untuk LR - Tree<br>models tanpa scaling<br>5. Imbalanced Data<br>96.6% Normal - 3.4% Failure<br>SMOTE scale_pos_weight = 28.5 class_weight='balanced'<br>strategy=0.3 - k=5 XGBoost RF &LR<br>6. Split Stratified<br>Train 70% - Val 10% - Test<br>20%<br>SMOTE hanya di Training<br>7. Modeling<br>XGBoost - Random Forest -<br>LR Baseline<br>GridSearchCV 5-Fold<br>Stratified<br>8. Evaluasi<br>Recall - F1 - ROC-AUC<br>Precision - Accuracy - CM -<br>SHAP<br>9. Kesimpulan<br>Model terbaik untuk Early<br>Warning<br>Feature importance —<br>Maintenance Policy<br><!-- End of picture text -->
+1. Data Collection<br>AI4I 2020 - 10.000 x 14- CC<br>BY 4.0<br>2. EDA<br>Deskriptif + Distribusi<br>failure - Histogram/KDE<br>Boxplot - Korelasi - Scatter<br>zona gagal<br>3. Pra-Pemrosesan<br>Drop UID & Product ID -<br>Power, Strain, Temp_diff<br>IQR + Winsorization - Type:<br>L/M/H > 0/1/2<br>4, Standardisasi<br>StandardScaler (Z-score)<br>Hanya untuk LR - Tree<br>models tanpa scaling<br>5. Imbalanced Data<br>96.6% Normal - 3.4% Failure<br>SMOTE 0.2 (no double-balance); LR class_weight='balanced'<br>strategy=0.2 - k=5 XGBoost RF &LR<br>6. Split Stratified<br>Train 70% - Val 10% - Test<br>20%<br>SMOTE hanya di Training<br>7. Modeling<br>XGBoost - Random Forest -<br>LR Baseline<br>GridSearchCV 5-Fold<br>Stratified<br>8. Evaluasi<br>Recall - F1 - ROC-AUC<br>Precision - Accuracy - CM -<br>SHAP<br>9. Kesimpulan<br>Model terbaik untuk Early<br>Warning<br>Feature importance —<br>Maintenance Policy<br><!-- End of picture text -->
 
 ## **Model 1: XGBoost Classifier (Extreme Gradient Boosting)** 
 
@@ -552,7 +558,7 @@ XGBoost merupakan pilihan terdepan untuk Predictive Maintenance berbasis data ta
 
 ## **Justifikasi pemilihan XGBoost:** 
 
-- **<mark>scale_pos_weight</mark>** <mark>:</mark> Parameter built-in yang secara langsung menangani class imbalance tanpa memerlukan SMOTE  nilai ~28.5 sesuai rasio kelas 
+- **<mark>scale_pos_weight</mark>** <mark>:</mark> tersedia untuk imbalance, namun pada pipeline final **diset 1.0** saat data sudah di-SMOTE agar menghindari double-balancing (penyebab Precision anjlok di eksperimen awal) 
 
 - **Regularisasi L1/L2 built-in** : Mencegah overfitting pada feature space yang diperkaya oleh feature engineering 
 
@@ -618,7 +624,7 @@ ses Semua model siap digunakan pada Assignment II XGBoost scale_pos_ weight: 28.
 |3. Preprocessing|Hapus kolom, feature engineering,<br>encoding|pandas,numpy|DataFrame 10.000 × 15|
 |4. Outlier Treatment|IQR detection + Winsorization|scipy.stats.mstats|DataFrame tanpa outlier<br>ekstrem|
 |5. Standardisasi|StandardScaler (untuk LR baseline)|sklearn.preprocessing|X_train_scaled,<br>X_val_scaled, X_test_scaled|
-|6. Imbalanced<br>Handling|SMOTE + class_weight +<br>scale_pos_weight|imblearn.over_sampling|X_res (7.000→8.791), y_res|
+|6. Imbalanced<br>Handling|SMOTE 0.2 (tree tanpa double-balance); LR class_weight|imblearn.over_sampling|X_res (~8115 baris), y_res|
 |7. Data Splitting|Stratified 70/10/20|sklearn.model_selection|Train/Val/Test sets|
 |8. Modeling (Asgmt II)|XGBoost, Random Forest, LR<br>Baseline|xgboost, sklearn|Trained models|
 |9. Evaluasi (Asgmt II)|Recall, F1, ROC-AUC, CM|sklearn.metrics, shap|Laporan perbandingan model|
@@ -627,249 +633,240 @@ ses Semua model siap digunakan pada Assignment II XGBoost scale_pos_ weight: 28.
 
 33 | P a g e 
 
-## **BAB 3** 
+## **BAB 3 — Hasil Eksperimen, Analisis Alasan Metrik, dan Pembahasan**
 
-## **3.1 Hasil Hyperparameter Tuning** 
+Bab ini menyajikan hasil Assignment II setelah mitigasi overfitting/underfitting. Evaluasi dipisah menjadi **(A) Model Utama** sesuai ruang lingkup penelitian (XGBoost, Random Forest, Logistic Regression + Gradient Boosting sebagai pembanding) dan **(B) Extended Models** sebagai penguat eksperimen. Setiap angka dilengkapi **alasan metodologis** mengapa nilai terbentuk demikian.
 
-Proses tuning dilakukan menggunakan **GridSearchCV dengan 5-Fold Stratified CrossValidation** , menguji 54 kombinasi hyperparameter untuk XGBoost dan Random Forest (270 fits masing-masing), serta 8 kombinasi untuk Logistic Regression, dengan metrik scoring F1-Score. 
+### **3.0 Ringkasan Perubahan Metodologi (sebelum → sesudah mitigasi)**
 
-## **Rencana Tuning per Model** 
+| Aspek | Sebelum (diagnosis awal) | Sesudah (pipeline final) | Alasan diubah |
+|-------|--------------------------|---------------------------|---------------|
+| SMOTE | `strategy=0.3` (failure train 237→2028) | **`strategy=0.2`** (237→1352) | Rasio tinggi menambah noise sintetis → Precision turun |
+| Balancing tree | SMOTE + `scale_pos_weight≈28` / `class_weight=balanced` | **SMOTE saja** (`scale_pos_weight=1`, RF tanpa class_weight) | Double-balancing membuat model terlalu agresif ke Failure (P turun, F1 jelek) |
+| Scoring tuning | CV di data SMOTE | **`PredefinedSplit` skor di validation asli** | Mencegah memilih model yang hanya hafal sampel SMOTE |
+| XGBoost | depth tinggi, tanpa early stopping | depth 3–4, early stopping, regularisasi | Menurunkan gap Train–Val |
+| LR | linear murni | **Polynomial degree=2 + StandardScaler** | Menambah kapasitas non-linear (tetap underfit relatif tree) |
 
-**Tabel 3.1. Rencana Hyperparameter Tuning** 
+---
 
-|**Model**|**Hyperparameter**|**Rentang Nilai yang Diuji**|**Metode**|
-|---|---|---|---|
-|**XGBoost**|n_estimators|100, 200, 300, 500|GridSearchCV|
-||learning_rate|0.01, 0.05, 0.1, 0.2|GridSearchCV|
-||max_depth|3, 4, 6, 8|GridSearchCV|
-||subsample|0.7, 0.8, 1.0|GridSearchCV|
-||scale_pos_weight|1, 10, 28.5 (rasio aktual)|GridSearchCV|
-|**Random Forest**|n_estimators|100, 200, 300, 500|GridSearchCV|
-||max_depth|None, 10, 20, 30|GridSearchCV|
-||min_samples_split|2, 5, 10|GridSearchCV|
-||class_weight|balanced,<br>balanced_subsample|GridSearchCV|
-|**Logistic Regression**<br>**(Baseline)**|C|0.01, 0.1, 1, 10|GridSearchCV|
-||penalty|l1, l2|GridSearchCV|
-||class_weight|balanced|Fixed|
+## **3.1 Hasil Hyperparameter Tuning (Model Utama)**
 
+Tuning dilakukan dengan **GridSearchCV + PredefinedSplit**: train = data SMOTE, skor F1 diukur pada **validation set berdistribusi asli**. Ini berbeda dari CV murni di SMOTE yang sebelumnya menghasilkan F1 CV sangat tinggi (~0.96) tetapi drop tajam di test.
 
+**Mengapa skor val-asli lebih rendah dari CV-SMOTE lama?**  
+Validation asli hanya ~3.4% failure (~34 kasus). Model yang “terlalu cocok” ke SMOTE akan dihukum di val asli → grid search memilih konfigurasi yang lebih generalizable ke distribusi lapangan.
 
-34 | P a g e 
+**Tabel 3.1. Arah Hyperparameter Final (inti)**
 
-Fitting 5 folds for each of 54 candidates, totalling 27@ fits Best XGBoost params: {‘learning_ rate’: 0.1, ‘max_depth': 6, ‘n_estimators': 300, ‘subsample’: 0.8} Best CV Fi1-Score: 9.9663747869260876 Fitting 5 folds for each of 54 candidates, totalling 27@ fits Best Random Forest params: {'class_weight': ‘balanced’, ‘max_depth': None, 'min_samples_split': 2, ‘n_estimators': 200} Best CV Fi1-Score: @.9622239612615772 Best LR params: {'C': 1, ‘penalty': '12'} 
+| Model | Fokus parameter | Alasan |
+|-------|-----------------|--------|
+| XGBoost | `max_depth` 3–4, `learning_rate` 0.05–0.1, `scale_pos_weight=1`, early stopping | Meniru perilaku sklearn GB yang stabil; hindari overfit SMOTE |
+| Random Forest | tanpa `class_weight`, `min_samples_leaf/split` terkontrol | Bagging + SMOTE 0.2 cukup; class_weight menambah bias Failure |
+| LR-Poly | Pipeline Poly(2) + `C`, `penalty` l1/l2, `class_weight=balanced` | Linear murni underfit; poly menambah interaksi Torque–RPM, dll. |
 
+Gambar terkait: `fig10_pipeline_flowchart.png` (pipeline anti-overfit).
 
+---
 
-<!-- Start of picture text -->
-Learning Curve: XGBoost Learning Curve: Random Forest Learning Curve: Logistic Regression<br>1004 © —E ° ° 1.00 4 ——————1—_—_@— 025<br>0.98 4 0.24<br>0.98 PNA »<br>0.96 + — ~ __ an [ / nN ~ 4y, ~o<br>g 0.96 Pp = ~ ¥ 0.944 pail g é / \ 7<br>Fea& 3a© o924 §a* 0.22 oY\ \ ef/J e a °<br>0.94 \/<br>021 "§<br>0.904 °<br>0.92 « 0.88 4 0.20<br>—@ Training F1 —® Training F1 —® Training F1<br>—® ValidationF1 0.86 4 —®- ValidationFl 0.19 —®- ValidationF1<br>5600 5800 6000 6200 6400 6600 6800 7000 5600 5800 6000 6200 6400 6600 6800 7000 1000 2000 3000 4000 5000<br>jumlah Data Training Jumlah Data Training Jumiah Data Training<br>XGBoost — Train Fl: @.9998 | Val F1: @.7229<br>Random Forest — Train F1: 1.0000 | Val F1: @.8955<br>Logistic Regression — Train F1: @.2356 | Val F1: @.2333<br><!-- End of picture text -->
+## **3.2 Diagnosa Overfitting / Underfitting (setelah mitigasi)**
 
-Tabel 3.2. Perbandingan F1-Score: Training vs Validation 
+**Tabel 3.2. Gap Train vs Validation F1 (Block 12)**
 
-|**Model**|**Train F1**|**Validation F1**|**Gap**|**Diagnosis**|
-|---|---|---|---|---|
-|**XGBoost**|0.9998|0.7229|**0.2769 (sangat**<br>**besar)**|**Overfitting parah**|
-|**Random Forest**|1.0000|0.8955|**0.1045 (besar)**|**Overfitting sedang-**<br>**berat**|
-|**Logistic**<br>**Regression**|0.2356|0.2333|0.0023 (kecil)|**Underfitting**|
+| Model | Train F1 | Val F1 | Gap | Diagnosis | Alasan nilai seperti itu |
+|-------|----------|--------|-----|-----------|---------------------------|
+| **XGBoost (reg)** | 0.9244 | 0.9062 | **0.0182** | Sehat | Depth rendah + early stopping + tanpa double-balance → kurva train/val saling dekat (dulu gap 0.28) |
+| **Random Forest (reg)** | 1.0000 | 1.0000* | 0.0000 | Dicek lewat **test** | RF mudah mencapai Train F1=1 pada SMOTE (pohon bisa murni). Val F1=1.0 pada ~34 failure **terlalu sempurna** → kemungkinan varians val kecil, **bukan** bukti sempurna di lapangan |
+| **LR-Poly** | 0.4198 | 0.4314 | −0.0116 | Underfit | Kapasitas tetap terbatas vs interaksi fisik kompleks; poly membantu (naik dari F1~0.23) tetapi Precision tetap rendah |
 
+\*Interpretasi hati-hati: keputusan final selalu dari **test hold-out** (~68 failure), bukan Val F1=1.0.
 
+Gambar: `fig11_learning_curves.png`.
 
-Grafik learning curve pada Gambar di atas mengkonfirmasi tiga pola yang sangat berbeda pada ketiga model: 
+---
 
-**XGBoost** menunjukkan pola overfitting klasik  kurva Training F1 (biru) menempel datar di angka mendekati 1.0 sejak awal, sementara kurva Validation F1 (merah) berada jauh di bawah pada kisaran 0.92–0.96 dan baru mulai naik seiring bertambahnya data. Gap sebesar 0.28 antara Train F1 (0.9998) dan Val F1 (0.7229) pada evaluasi langsung menegaskan bahwa model terlalu hafal pola spesifik pada data training hasil SMOTE, termasuk kemungkinan menghafal pola sintetis yang dibuat oleh SMOTE itu sendiri — fenomena yang dikenal sebagai _SMOTE overfitting_ . 
+## **3.3 Evaluasi Test Set — Model Utama (Hold-out)**
 
-**Random Forest** memperlihatkan pola serupa namun lebih ringan  Training F1 juga mencapai 1.0000 (wajar karena karakteristik pohon keputusan yang dapat tumbuh hingga node murni), namun Validation F1 (0.8955) jauh lebih baik dibanding XGBoost pada evaluasi yang sama. Ini menunjukkan Random Forest sedikit lebih robust terhadap overfitting berkat mekanisme _bagging_ dan _feature randomness_ yang built-in. 
+Test set: 2.000 baris, distribusi asli (~68 failure). Metrik utama untuk kesimpulan Assignment: **F1@0.5**, dilengkapi Recall, Precision, ROC-AUC.
 
-**Logistic Regression** justru menunjukkan pola sebaliknya **underfitting** . Baik Training F1 (0.2356) maupun Validation F1 (0.2333) sama-sama sangat rendah dan saling berdekatan, dengan kurva pada grafik ketiga yang berfluktuasi liar di kisaran 0.19–0.24 tanpa tren peningkatan yang jelas. Ini mengindikasikan model linear sederhana ini **gagal total** menangkap kompleksitas hubungan nonlinear antar fitur sensor (misalnya interaksi Torque-RPM yang berkorelasi -0.88, atau ambang batas fisik Power dan Strain yang bersifat non-linear). 
+**Tabel 3.3. Hasil Test Model Utama (F1@0.5)**
 
-36 | P a g e 
+| Rank | Model | Accuracy | Precision | Recall | **F1@0.5** | ROC-AUC |
+|------|-------|----------|-----------|--------|------------|---------|
+| 1 | **Random Forest (reg)** | 0.991 | **0.903** | **0.824** | **0.862** | **0.988** |
+| 2 | Gradient Boosting (default) | 0.991 | 0.889 | 0.824 | 0.855 | 0.985 |
+| 3 | XGBoost (reg) | 0.990 | 0.887 | 0.809 | 0.846 | 0.983 |
+| 4 | LR-Poly (reg) | 0.910 | 0.260 | 0.897 | 0.403 | 0.968 |
 
-**Upaya Mitigasi yang Direkomendasikan** 
+### **Alasan mengapa nilai terbentuk seperti itu**
 
-**Tabel 3.3. Rekomendasi Perbaikan Berdasarkan Diagnosis Aktual** 
+1. **Mengapa Accuracy semua tree ~0.99?**  
+   Kelas Normal mendominasi (~96.6%). Accuracy tinggi **tidak** berarti model bagus untuk PdM; yang relevan adalah deteksi Failure (Recall/Precision/F1).
 
-|**Model**|**Masalah Terdeteksi**|**Rekomendasi Perbaikan**|
-|---|---|---|
-|**XGBoost**|Overfitting<br>parah<br>(gap 0.28)|Turunkan max_depth ke 3-4, tambahkan<br>reg_alpha/reg_lambda, terapkan early_stopping_rounds,<br>kurangi rasio SMOTE dari 0.3|
-|**Random**|Overfitting<br>sedang|Batasi max_depth (jangan None), naikkan|
-|**Forest**|(gap 0.10)|min_samples_leaf menjadi 5-10, kurangi n_estimators|
-|**Logistic**|Underfitting parah|Tambahkan fitur polynomial/interaksi, gunakan kernel non-|
-|**Regression**||linear (ganti ke SVM-RBF), atau terima sebagai baseline<br>pembanding saja|
+2. **Mengapa Random Forest F1 & AUC tertinggi di Main?**  
+   - Bagging mengurangi varians dibanding boosting yang terlalu agresif pada SMOTE.  
+   - Tanpa double-balancing, Precision tetap tinggi (0.903) sambil mempertahankan Recall 0.824.  
+   - AUC 0.988 menunjukkan ranking probabilitas Failure paling baik di antara model utama.
 
+3. **Mengapa Recall RF = Recall GB (0.824)?**  
+   Keduanya menangkap jumlah Failure yang sama di threshold 0.5 pada test ini. Perbedaan kualitas ada di **Precision/F1/AUC**: RF lebih sedikit false alarm relatif terhadap keseimbangan F1, dan ranking skornya lebih baik (AUC).
 
+4. **Mengapa Gradient Boosting tetap sangat dekat (F1 0.855)?**  
+   Default sklearn GB (`depth` rendah, learning rate moderat) secara alami mirip konfigurasi “jinak”. Itu sebabnya di eksperimen awal GB terlihat unggul saat XGB/RF masih overfit SMOTE. Setelah mitigasi, RF menyusul/mengungguli tipis.
 
-## **3.3 Hasil Evaluasi Model pada Test Set (Hold-out)** 
+5. **Mengapa XGBoost F1 0.846 (bukan 0.707 lagi)?**  
+   Mitigasi berhasil: tidak lagi hafal SMOTE. F1 naik dari ~0.71 → ~0.85 karena Precision pulih (dulu ~0.60 akibat terlalu banyak prediksi Failure).
 
-Evaluasi akhir menggunakan test set 2.000 baris yang **tidak pernah disentuh** selama proses training maupun tuning. 
+6. **Mengapa LR-Poly Recall tinggi (0.90) tetapi F1 hanya 0.40?**  
+   `class_weight=balanced` + batas keputusan linear/poly membuat model sering memprediksi Failure → banyak **false positive** → Precision anjlok (0.26). Cocok sebagai baseline, tidak untuk produksi.
 
-**Tabel 3.4. Hasil Evaluasi Model pada Test Set** 
+7. **Threshold dari validation (kolom Threshold di eksperimen)**  
+   Optimasi threshold di val (~34 failure) tidak stabil; untuk RF, F1@0.5 (0.862) justru sedikit lebih baik dari F1 di thr val 0.575 (0.857). Karena itu kesimpulan produksi memakai **F1@0.5**.
 
-|**Model**|**Accuracy**|**Precision**|**Recall**|**F1-Score**|**ROC-AUC**|
-|---|---|---|---|---|---|
-|**XGBoost**|0.976|0.604|**0.853**|0.707|0.982|
-|**Random Forest**|**0.988**|**0.844**|0.794|**0.818**|**0.985**|
-|**Logistic Regression**|0.817|0.137|0.824|0.234|0.906|
+Gambar: `fig12_confusion_matrices.png`, `main_models_vs_gb.csv`.
 
+---
 
+## **3.4 Repeated Stratified K-Fold (Stabilitas)**
 
-37 | P a g e 
+**Tabel 3.4. CV (5×3) — mean ± std**
 
+| Model | CV F1 | CV Recall | CV Precision | CV ROC-AUC |
+|-------|-------|-----------|--------------|------------|
+| Random Forest (reg) | **0.949 ± 0.012** | 0.921 ± 0.021 | 0.978 ± 0.008 | 0.996 ± 0.002 |
+| Gradient Boosting | 0.915 ± 0.013 | 0.867 ± 0.019 | 0.969 ± 0.011 | 0.990 ± 0.002 |
+| XGBoost (reg) | 0.906 ± 0.011 | 0.847 ± 0.018 | 0.974 ± 0.013 | 0.991 ± 0.002 |
+| LR-Poly | 0.402 ± 0.018 | 0.880 ± 0.042 | 0.261 ± 0.015 | 0.959 ± 0.014 |
 
+**Alasan CV F1 tree (~0.90–0.95) lebih tinggi dari test F1 (~0.85):**  
+CV untuk tree dijalankan pada **X_res (SMOTE)** sehingga distribusi train/fold lebih “seimbang” daripada test asli. Ini **bukan** kontradiksi; melainkan mengingatkan bahwa skor CV-SMOTE bersifat optimistis. Pola peringkat tetap konsisten: **RF > GB > XGB >> LR**.
 
-<!-- Start of picture text -->
-Confusion Matrix: XGBoost Confusion Matrix: Random Forest Confusion Matrix: Logistic Regression<br>1750 1750 1400<br>Normal 1894 1500 Normal 1922 1500 Normal 1578 p00<br>1250 1250 1000<br>3 1000 3 1000 * 800<br>" ° .<br>750 750 600<br>Failure — Failure soo Failure 400<br>250 250 200<br>Normal Failure Normal Failure Normal Failure<br>Predicted label Predicted label Predicted label<br>Model Accuracy Precision Recall F1-Score ROC-AUC<br>) XGBoost @.976 @.604167 @.852941 ©.707317 @.982364<br>1 Random Forest 0.988 @.84375@ @.794118 ©@.818182 6.984746<br>2 Logistic Regression @.817 0.136585 ©.823529 ©.23431@ @.9@5896<br><!-- End of picture text -->
+---
 
-Model CV F1 (meantstd) CV Recall (meantstd) CV ROC-AUC (mean+std) | 0) XGBoost 0.964 + 0.005 0.981 + 0.007 0.999 + 0.000 1 Random Forest 0.963 + 0.005 0.950 + 0.012 0.998 + 0.001 2 Logistic Regression 0.233 + 0.013 0.818 + 0.050 0.887 + 0.020 
+## **3.5 Eksperimen Extended Models (Penguat) — Ranking Berlapis**
 
+### **A) Ranking Model Utama (skema Assignment)**
 
+Pemenang: **Random Forest (reg)** — lihat Tabel 3.3.
 
-<!-- Start of picture text -->
-Perbandingan Performa Model (F1-Score, Recall, Precision)<br>1.0 mmm F1-Score<br>> © Mm Recall<br>i t 3 S lm Precision<br>x 8 a 3 3 3<br>Soo 2 s<br>g 5 & 8<br>oe S 3 3<br>0.6 cs g<br>2 8 a 5. Fy<br>&5 es = a=5 a = 4S 23<br>0.4 Fa3a5]<br>~4<br>3<br>0.2<br>0.0<br>S© Ss s Se KoS RZoo KoS A Ss<br>RS SsSs se xS ¥s &e .&<br>& cog s<br>Model<br><!-- End of picture text -->
+### **B) Ranking Extended (default, belum tuning setara)**
 
-|**7**|CatBoost|0.478|0.868|0.330|Boosting|
-|---|---|---|---|---|---|
-|**8**|SVM|0.451|0.882|0.303|Kernel-based|
-|**9**|KNN|0.374|0.250|0.739|Instance-based|
+| Rank | Model | F1 | Recall | Precision | ROC-AUC | Alasan singkat pola metrik |
+|------|-------|------|--------|-----------|---------|----------------------------|
+| 1 | **LightGBM** | **0.877** | 0.838 | 0.919 | 0.984 | Boosting leaf-wise + default cocok tabular AI4I; belum dijinakkan seperti RF tuned |
+| 2 | CatBoost | 0.806 | 0.794 | 0.818 | 0.978 | Kuat, sedikit di bawah LightGBM pada seed/setup ini |
+| 3 | ANN (MLP) | 0.683 | 0.632 | 0.741 | 0.976 | Butuh scaling; kapasitas terbatas tanpa tuning arsitektur |
+| 4 | Decision Tree | 0.559 | 0.838 | 0.419 | 0.911 | Recall tinggi tapi banyak FP (Precision rendah) |
+| 5 | AdaBoost | 0.541 | 0.485 | 0.611 | 0.965 | Kurang agresif pada minority |
+| 6 | Naive Bayes | 0.493 | 0.529 | 0.462 | 0.932 | Asumsi independensi fitur dilanggar (korelasi RPM–Torque kuat) |
+| 7 | SVM | 0.451 | **0.882** | 0.303 | 0.972 | `class_weight=balanced` → Recall tinggi, Precision hancur (banyak false alarm) |
+| 8 | KNN | 0.374 | 0.250 | 0.739 | 0.864 | Jarak di ruang fitur + imbalance → banyak Failure terlewat |
 
+**Mengapa LightGBM bisa “menang F1 global” tetapi tidak menggantikan kesimpulan Assignment?**
 
+1. LightGBM masuk kelompok **Extended (default)**; RF adalah **Main (tuned anti-overfit)**. Perbandingan belum apple-to-apple.  
+2. Selisih F1 LightGBM vs RF hanya ~0.015 pada **~68 failure** → sensitif 1–2 kesalahan prediksi.  
+3. RF tetap unggul **AUC (0.988 vs 0.984)** dan merupakan jawaban hipotesis utama (XGB vs RF vs LR).  
+4. Best practice laporan: LightGBM = **temuan future work** (wajib di-tune setara sebelum diklaim superior).
 
-Temuan paling menarik dari eksperimen lanjutan ini adalah **Gradient Boosting (implementasi sklearn) justru mengungguli seluruh model lain** , termasuk XGBoost dan Random Forest yang sudah melalui hyperparameter tuning intensif — meskipun Gradient Boosting di sini masih menggunakan parameter default tanpa tuning sama sekali. Hal ini mengindikasikan bahwa parameter default sklearn untuk Gradient Boosting kebetulan sudah cukup mendekati konfigurasi optimal untuk karakteristik dataset AI4I 2020, atau bahwa XGBoost dan Random Forest versi tuned mengalami overfitting terhadap data SMOTE sehingga performanya justru menurun saat diuji pada test set dengan distribusi asli. 
+Gambar: `fig16_main_models.png`, `fig16_extended_models.png`, `fig16_all_models_comparison.png`.
 
-Pola yang sangat konsisten muncul dari LightGBM, CatBoost, dan SVM: ketiganya mencatat **Recall tinggi (0.87–0.88) namun Precision sangat rendah (0.30–0.55)** . Ini menunjukkan ketiga algoritma tersebut, tanpa tuning tambahan, cenderung terlalu agresif memprediksi kelas Failure  menghasilkan banyak false alarm. Sebaliknya, **KNN menunjukkan pola berlawanan** dengan Recall sangat rendah (0.250) model ini gagal mendeteksi sebagian besar kasus Failure yang sesungguhnya, kemungkinan besar karena _curse of dimensionality_ pada data dengan banyak fitur turunan hasil feature engineering. 
+---
 
-## **Analisis Trade-off untuk Konteks Manufaktur** 
+## **3.6 Sensitivitas Rasio SMOTE (pada Random Forest)**
 
-Dalam konteks predictive maintenance, **Recall lebih diprioritaskan** dibanding Precision karena biaya _false negative_ (kegagalan mesin tidak terdeteksi) jauh lebih besar daripada biaya _false positive_ (inspeksi yang ternyata tidak diperlukan). Berdasarkan kriteria ini, urutan prioritas model berubah signifikan: 
+**Tabel 3.6. Pengaruh SMOTE Ratio terhadap Test RF**
 
-**Tabel 3.7. Re-ranking Model Berdasarkan Prioritas Recall (Konteks Manufaktur)** 
+| SMOTE Ratio | Test F1 | Recall | Precision | ROC-AUC | Alasan |
+|-------------|---------|--------|-----------|---------|--------|
+| **0.2** | **0.853** | 0.809 | **0.902** | 0.988 | Sedikit sintetis → Precision terjaga |
+| 0.5 | 0.778 | 0.824 | 0.737 | 0.988 | Lebih banyak Failure sintetis → FP naik |
+| 0.7 | 0.752 | 0.824 | 0.691 | 0.984 | Pola sama: Recall flat, Precision terus turun |
+| 1.0 | 0.742 | 0.824 | 0.675 | 0.983 | Over-sampling penuh memperburuk false alarm |
 
-|**Peringkat (by**<br>**Recall)**|**Model**|**Recall**|**Precision**||**Catatan Trade-off**|
-|---|---|---|---|---|---|
-|**1**|SVM|0.882|0.303|Recall<br>terendah|tertinggi,<br>tapi<br>Precision<br>kedua|
+**Kesimpulan metodologi:** memilih SMOTE 0.2 bukan sembarang; empiris F1 terbaik untuk RF. Rasio lebih besar **tidak** menaikkan Recall secara bermakna, tetapi merusak Precision.
 
+---
 
+## **3.7 Uji McNemar dan SHAP (Evidence Statistik + Explainability)**
 
-40 | P a g e 
+### **McNemar (prediksi test)**
 
-|**2**|CatBoost|0.868|0.330|Recall sangat tinggi, Precision sangat<br>rendah|
-|---|---|---|---|---|
-|**2**|LightGBM|0.868|0.551|Recall tinggi, Precision sedang|
-|**4**|XGBoost (tuned)|0.853|0.604|**Keseimbangan lebih baik**|
-|**5**|Decision Tree|0.838|0.553|Cepat tapi Precision rendah|
-|**6**|Gradient Boosting|0.824|0.812|**Trade-off paling seimbang secara**<br>**keseluruhan**|
-|**7**|Logistic<br>Regression|0.824|0.137|Recall tinggi tapi Precision sangat<br>buruk (underfitting)|
-|**8**|AdaBoost|0.735|0.602|Sedang di semua metrik|
-|**9**|Random<br>Forest<br>(tuned)|0.794|0.844|Precision terbaik, tapi Recall bukan<br>prioritas|
+| Perbandingan | p-value | Interpretasi | Alasan |
+|--------------|---------|--------------|--------|
+| RF vs Gradient Boosting | ≈ 1.00 | Tidak signifikan | Hanya beda 2–3 prediksi; performa praktis setara |
+| RF vs XGBoost | ≈ 0.73 | Tidak signifikan | Demikian pula |
 
+**Mengapa tetap merekomendasikan RF meski McNemar tidak signifikan?**  
+McNemar menguji perbedaan **kesalahan prediksi**, bukan secara langsung “F1 lebih tinggi”. Karena prediksi hampir sama, p besar. Pemilihan RF tetap sah berdasarkan **F1@0.5 + AUC + konteks operasional** (lebih baik atau setara, dengan ranking skor terbaik).
 
+### **SHAP — Random Forest (model rekomendasi)**
 
-Tabel di atas menunjukkan bahwa memilih model "terbaik" untuk deployment tidak bisa hanya bergantung pada satu metrik. Jika prioritas mutlak adalah meminimalkan kegagalan yang terlewat tanpa mempedulikan jumlah false alarm, SVM atau CatBoost menjadi kandidat terbaik meski akan membebani tim maintenance dengan banyak inspeksi tidak perlu. Namun jika perusahaan menginginkan keseimbangan operasional yang realistis antara mendeteksi kegagalan dan menjaga efisiensi sumber daya inspeksi, **Gradient Boosting (default) dan XGBoost (tuned)** menjadi pilihan paling rasional karena keduanya mencatat kombinasi Recall tinggi dan Precision yang masih dapat diterima. 
+| Fitur (mean \|SHAP\|) | Peran domain |
+|------------------------|--------------|
+| Rotational speed (rpm) | Zona gagal power/kecepatan |
+| Strain (Torque×Tool wear) | Fitur turunan keausan + beban |
+| Power (RPM×Torque) | Daya potong / overload |
+| Temp_diff | Gradien suhu proses–udara |
+| Tool wear | Keausan pahat |
+| Torque | Beban torsi langsung |
 
-41 | P a g e 
+**Alasan urutan ini masuk akal:** EDA menunjukkan zona kegagalan kuat di ruang RPM–Torque dan Tool wear–Torque; feature engineering Power/Strain/Temp_diff memang didesain menangkap mekanisme fisik tersebut — SHAP mengonfirmasi bahwa model RF memakai sinyal yang sama, bukan artefak acak.
 
-## **3.5 Kesimpulan Bab 3** 
+Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
-Tiga temuan utama dapat disimpulkan dari keseluruhan eksperimen tuning, diagnosis overfitting/underfitting, dan evaluasi sembilan algoritma pada studi kasus predictive maintenance AI4I 2020: 
+---
 
-**Pertama** , proses hyperparameter tuning berhasil menemukan konfigurasi optimal secara matematis pada training set (CV F1-Score XGBoost 0.966, Random Forest 0.962), namun skor tinggi ini **tidak serta-merta mencerminkan performa nyata di lapangan** terbukti dari penurunan tajam F1-Score saat diuji pada test set dengan distribusi kelas asli (XGBoost turun ke 0.707, meski Random Forest relatif lebih stabil di 0.818). Temuan ini menegaskan pentingnya evaluasi hold-out test set yang independen dari proses SMOTE dan tuning, bukan hanya mengandalkan skor cross-validation. 
+## **3.8 Kesimpulan Bab 3 (untuk Sistem Predictive Maintenance)**
 
-**Kedua** , dari sisi generalisasi model, **Random Forest terbukti paling robust** di antara tiga model utama, dengan gap Train-Validation F1 paling kecil (0.10) dibanding XGBoost (0.28), serta mencatat kombinasi Accuracy, Precision, dan ROC-AUC tertinggi pada test set. Sebaliknya, **Logistic Regression terbukti tidak layak** digunakan sebagai model produksi untuk kasus ini karena underfitting parah  model linear sederhana ini gagal menangkap kompleksitas hubungan non-linear antar fitur sensor mesin. 
+1. **Model produksi dalam skema penelitian ini: Random Forest (reg).**  
+   Alasan: F1@0.5 tertinggi di model utama (0.862), ROC-AUC tertinggi (0.988), Precision tinggi (0.903) dengan Recall 0.824 — seimbang untuk early warning tanpa false alarm berlebihan.
 
-**Ketiga** , eksplorasi sembilan algoritma tambahan mengungkap temuan tak terduga bahwa **Gradient Boosting versi default (tanpa tuning)** justru mencatat F1-Score tertinggi (0.818) dan trade-off Recall-Precision paling seimbang di antara seluruh model yang diuji, mengungguli XGBoost dan Random Forest yang sudah melalui tuning intensif. Hal ini menjadi pelajaran penting bahwa hyperparameter tuning yang terlalu agresif pada data hasil SMOTE berisiko menyebabkan overfitting terhadap pola sintetis, sehingga pemilihan model akhir sebaiknya selalu divalidasi ulang pada test set dengan distribusi data asli, bukan hanya berdasarkan skor cross-validation semata. 
+2. **Gradient Boosting** adalah kompetitor terdekat (F1 0.855; Recall sama). McNemar tidak signifikan → setara statistik; RF dipilih karena F1@0.5 & AUC sedikit lebih baik.
 
-42 | P a g e 
+3. **XGBoost (reg)** sudah keluar dari overfit parah (gap Train–Val 0.018; F1 test 0.846) dan layak sebagai alternatif.
 
-**3.6 Kelemahan dan Keterbatasan Penelitian** 
+4. **LR-Poly** tetap underfit untuk produksi (F1 0.40) meski Recall tinggi — Precision terlalu rendah.
 
-## **Keterbatasan Metodologis:** 
+5. **LightGBM (default)** mencatat F1 tertinggi di extended (0.877). Ini **bukan** mengganti kesimpulan Assignment, melainkan peluang **future work** dengan tuning setara.
 
-- **Overfitting belum sepenuhnya diatasi** : Penelitian ini baru sampai pada tahap _observasi_ dan _identifikasi_ overfitting pada XGBoost dan Random Forest, namun belum melakukan iterasi ulang tuning dengan parameter regularisasi yang lebih ketat sebagai tindak lanjut konkret. Rekomendasi mitigasi pada Tabel 3.3 masih bersifat rencana, belum diuji ulang hasilnya. 
+6. **SMOTE 0.2** terbukti pilihan terbaik untuk RF pada sensitivitas rasio.
 
-- **SMOTE hanya diterapkan pada satu rasio (0.3)** : Tidak dilakukan eksperimen sensitivitas terhadap rasio SMOTE lain (misalnya 0.5, 0.7, atau 1.0) yang berpotensi mengurangi tingkat overfitting yang teramati, khususnya pada XGBoost. 
+7. **Kebijakan maintenance:** prioritas monitoring sensor/fitur SHAP top (RPM, Strain, Power, Temp_diff, Tool wear).
 
-- **Model tambahan (LightGBM, CatBoost, SVM, dst.) tidak di-tuning** : Sembilan algoritma pada eksplorasi tambahan seluruhnya menggunakan parameter default, sehingga perbandingan dengan XGBoost dan Random Forest (yang sudah di-tuning) menjadi tidak sepenuhnya adil ( _apple-to-apple_ ). Ada kemungkinan performa LightGBM atau CatBoost dapat meningkat signifikan jika diberi perlakuan tuning yang setara. 
+---
 
-## **Keterbatasan Data:** 
+## **3.9 Kelemahan dan Keterbatasan (diperbarui)**
 
-- **Dataset bersifat sintetis** : AI4I 2020 adalah data simulasi, bukan data sensor riil dari pabrik. Meski dirancang menyerupai kondisi nyata, pola statistiknya mungkin tidak sepenuhnya menangkap kompleksitas dan noise yang ada pada mesin industri sesungguhnya. 
+### **Keterbatasan yang masih berlaku**
+- Dataset AI4I bersifat **sintetis**.  
+- Failure di test hanya ~**68** kasus → metrik F1 sensitif.  
+- Extended models (termasuk LightGBM) **belum** di-tune setara Main.  
+- Val set kecil (~34 failure) membuat threshold-from-val kurang stabil.
 
-- **Jumlah kasus Failure sangat terbatas (339 dari 10.000)** : Bahkan setelah SMOTE, keterbatasan data asli pada kelas minoritas membuat model rentan mempelajari pola dari sampel sintetis yang mungkin tidak sepenuhnya representatif terhadap variasi kegagalan mesin di dunia nyata. 
+### **Keterbatasan lama yang sudah dijawab oleh eksperimen ini**
+- ~~Mitigasi overfit belum diuji~~ → **sudah** (gap XGB 0.28 → 0.018; F1 XGB 0.71 → 0.85).  
+- ~~SMOTE hanya satu rasio~~ → **sudah** diuji 0.2/0.5/0.7/1.0 pada RF.  
+- ~~Belum ada McNemar~~ → **sudah** (RF vs GB / XGB).  
+- ~~Belum ada threshold experiment~~ → **sudah** di Block 13 (kesimpulan tetap F1@0.5).
 
-- **Test set kecil untuk kelas Failure (~68 kasus)** : Dengan hanya 68 kasus Failure pada test set, setiap kesalahan klasifikasi tunggal memiliki dampak signifikan terhadap metrik Recall dan Precision, membuat estimasi performa lebih rentan terhadap varians statistik dibanding jika jumlah kasus lebih besar. 
+---
 
-## **Keterbatasan Perbandingan Antar Studi:** 
+## **3.10 Future Works (revisi prioritas)**
 
-- Perbandingan dengan penelitian literatur (Al Mamlook et al., Sakmar et al., Cioch et al.) perlu dilakukan dengan hati-hati karena masing-masing menggunakan **dataset, jumlah fitur, dan strategi resampling yang berbeda** , sehingga perbedaan angka performa tidak selalu 
+1. **Tuning setara LightGBM/CatBoost** lalu bandingkan head-to-head dengan RF (termasuk McNemar).  
+2. Kalibrasi probabilitas + kebijakan threshold berbasis biaya FN vs FP di pabrik.  
+3. Multi-class failure modes (TWF/HDF/PWF/OSF/RNF).  
+4. Validasi pada data sensor riil / shift domain.  
+5. Deployment end-to-end (API inferensi, dashboard, alerting) untuk Final Project (AOL).
 
-43 | P a g e 
+---
 
-murni mencerminkan keunggulan algoritma, melainkan juga karakteristik data yang digunakan. 
+## **3.11 Tabel Referensi Algoritma (literatur — tetap relevan)**
 
-## **3.7 Tabel Referensi Algoritma dengan Konteks Penelitian Lengkap** 
+Tabel referensi studi sebelumnya (Al Mamlook, Sakmar, Cioch, dll.) tetap dapat digunakan sebagai konteks literatur. Yang berubah adalah **klaim hasil empiris studi ini**: pemenang Main = **Random Forest (reg)**; temuan Extended menonjol = **LightGBM (default)**.
 
-## **Tabel 3.8. Algoritma Tambahan  & Konteks Dataset dan Studi Rujukan** 
+---
 
-|**Algoritma**|**Kategori**|**Potensi**|**Metrik Kunci**|**Sumber**|**Dataset**|
-|---|---|---|---|---|---|
-|**LightGBM**|<sup>Gradient</sup><br>Boosting|Sangat<br>Baik|Acc 0.980,<br>Recall 0.730,<br>AUC 0.968|Al Mamlook<br>et al.,<br>INTCEC<br>2024|10.000 entri, 7 fitur<br>sensor, SMOTE<br>(339→9.661)|
-|**CatBoost**|Gradient<br>Boosting|Sangat<br>Baik|Recall 0.795<br>(tertinggi), AUC<br>0.971, Precision<br>0.593|Al Mamlook<br>et al.,<br>INTCEC<br>2024|10.000 entri, 7 fitur<br>sensor, SMOTE<br>(339→9.661)|
-|**CatBoost**<br>**(validasi)**|Gradient<br>Boosting|Baik<br>(Recall<br>0.79–<br>0.99)|Konfirmasi<br>efektivitas<br>SMOTE;<br>XGBoost paling<br>optimal trade-off|Sakmar et<br>al., Jurnal<br>SINTA 2025|AI4I 2020 asli (UCI),<br>10.000 baris, tanpa<br>modifikasi|
-|**SVM**|Kernel-based|Baik,<br>lambat di<br>data<br>besar|Acc 97.6–98.2%,<br>AUC >0.95,<br>speed 10.818<br>obs/detik|Cioch et al.,<br>ASTRJ 2025|100.000 baris, 3 fitur<br>sensor, imbalanced<br>80.3:19.7|
-|**Decision**<br>**Tree**|Tree<br>sederhana|Cukup<br>Baik,<br>tercepat|Acc 98.24%,<br>speed >421.000<br>obs/detik, size<br>4.7KB|Cioch et al.,<br>ASTRJ 2025|100.000 baris, 3 fitur<br>sensor, imbalanced<br>80.3:19.7|
-
-
-
-44 | P a g e 
-
-|**KNN**|Instance-<br>based|Kurang<br>Optimal|Acc 97.67%, 233<br>error (177 FN +<br>56 FP)|Cioch et al.,<br>ASTRJ 2025|100.000 baris, 3 fitur<br>sensor, imbalanced<br>80.3:19.7|
-|---|---|---|---|---|---|
-|**Naive**<br>**Bayes**|Probabilistic|Kurang<br>Optimal|Acc 96.34%<br>(terendah kedua),<br>366 FN|Cioch et al.,<br>ASTRJ 2025|100.000 baris, 3 fitur<br>sensor, imbalanced<br>80.3:19.7|
-|**AdaBoost**|Boosting<br>klasik|Sedang|AUC 0.940<br>(terendah dari 8<br>model), Recall<br>0.425|Al Mamlook<br>et al.,<br>INTCEC<br>2024|10.000 entri, 7 fitur<br>sensor, SMOTE<br>(339→9.661)|
-|**ANN**<br>**(MLP)**|Deep<br>Learning|Baik|Precision 0.803,<br>Acc 0.980,<br>Recall sedang<br>0.558|Al Mamlook<br>et al.,<br>INTCEC<br>2024|10.000 entri, 7 fitur<br>sensor, SMOTE<br>(339→9.661)|
-|**Gradient**<br>**Boosting**|Boosting|Sangat<br>Baik<br>(Terbaik)|Acc 0.982 dan<br>Precision 0.828<br>tertinggi dari 8<br>model|Al Mamlook<br>et al.,<br>INTCEC<br>2024|10.000 entri, 7 fitur<br>sensor, SMOTE<br>(339→9.661)|
-
-
-
-45 | P a g e 
-
-### **Future Works.** 
-
-### **1. Penyempurnaan Mitigasi Overfitting** 
-
-Penelitian saat ini baru sampai pada tahap _diagnosis_ overfitting pada XGBoost (gap 0.28) dan Random Forest (gap 0.10), namun rekomendasi mitigasi pada Tabel 3.3 belum diuji ulang. Pengembangan lanjutan perlu mengimplementasikan dan memvalidasi konfigurasi regularisasi baru (max_depth diturunkan, reg_alpha/reg_lambda ditambahkan, early_stopping_rounds diterapkan) lalu mengukur ulang gap TrainValidation F1 hingga mencapai target di bawah 0.05. 
-
-### **2. Eksperimen Sensitivitas Rasio SMOTE** 
-
-Penelitian ini hanya menguji satu rasio SMOTE (0.3). Pekerjaan lanjutan perlu melakukan grid search terhadap rasio 0.2, 0.5, 0.7, dan 1.0, serta membandingkan dengan teknik resampling alternatif seperti SMOTETomek atau ADASYN, untuk menentukan konfigurasi yang paling meminimalkan _SMOTE overfitting_ sekaligus mempertahankan Recall tinggi. 
-
-### **3. Tuning Setara untuk Seluruh Algoritma Kandidat** 
-
-Sembilan algoritma pada eksplorasi lanjutan (LightGBM, CatBoost, SVM, Decision Tree, KNN, Naive Bayes, AdaBoost, ANN, Gradient Boosting) seluruhnya masih menggunakan parameter default, sementara XGBoost dan Random Forest sudah di-tuning — perbandingan ini tidak _apple-to-apple_ . Penelitian lanjutan wajib menerapkan hyperparameter tuning setara pada semua kandidat, khususnya Gradient Boosting yang justru menjadi model terbaik meski masih default, untuk memastikan superioritasnya bukan kebetulan. 
-
-### **4. Validasi Statistik Signifikansi Antar Model** 
-
-Perbedaan F1-Score antar sembilan model belum diuji signifikansinya secara statistik. Penelitian lanjutan perlu menerapkan McNemar's test atau paired t-test pada hasil k-fold untuk memastikan superioritas Gradient Boosting atas Random Forest dan XGBoost benar-benar signifikan secara statistik, bukan variasi acak. 
-
-### **5. Optimasi Threshold Keputusan dan Kalibrasi Probabilitas** 
-
-Seluruh evaluasi saat ini menggunakan threshold default 0.5. Mengingat konteks manufaktur memprioritaskan Recall, penelitian lanjutan perlu menggunakan Precision-Recall curve untuk mencari threshold optimal per model, serta menerapkan CalibratedClassifierCV khususnya pada SVM dan Logistic Regression yang menunjukkan Precision sangat rendah. 
-
-### **6. Ekspansi ke Multi-Class Failure Mode Classification** 
-
-Ruang lingkup penelitian sudah mencantumkan target sekunder opsional berupa klasifikasi lima failure modes (TWF, HDF, PWF, OSF, RNF), namun belum diimplementasikan. Tahap lanjutan penting untuk mengembangkan model multi-class guna mengidentifikasi _jenis_ kegagalan spesifik, bukan hanya biner gagal/tidak — ini jauh lebih actionable bagi tim maintenance dalam menentukan tindakan perbaikan yang tepat. 
-
-### **7. Perbandingan Head-to-Head dengan Studi Rujukan** 
-
-Untuk memperkuat validitas eksternal, penelitian lanjutan perlu mereplikasi skema eksperimen studi rujukan (Al Mamlook et al. 2024, Sakmar et al. 2025) — menggunakan rasio SMOTE dan split data yang 
-
-46 | P a g e 
-
-identik — agar hasil dapat dibandingkan secara head-to-head, bukan hanya dibandingkan secara kualitatif seperti pada Tabel 3.8 saat ini. 
-
-### **8. Pengembangan Sistem Deployment End-to-End** 
-
-Sebagai kelanjutan menuju Final Project (AOL), penelitian perlu diarahkan pada pengembangan sistem _end-to-end_ — mulai dari API inferensi real-time, integrasi dengan dashboard monitoring sensor, hingga mekanisme _alerting_ otomatis bagi tim maintenance sesuai fokus penilaian AOL yang menekankan pengembangan sistem machine learning end-to-end beserta saran pengembangan ke depan. 
-
-47 | P a g e 
 
 ### **Referensi:** 
 
