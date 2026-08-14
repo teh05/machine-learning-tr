@@ -692,7 +692,7 @@ Test set: 2.000 baris, distribusi asli (~68 failure). Metrik utama untuk kesimpu
 
 | Rank | Model | Accuracy | Precision | Recall | **F1@0.5** | ROC-AUC |
 |------|-------|----------|-----------|--------|------------|---------|
-| 1 | **Random Forest (reg)** | 0.991 | **0.903** | **0.824** | **0.862** | **0.988** |
+| 1 | **Random Forest (reg)** | 0.993 | **0.965** | 0.809 | **0.880** | **0.988** |
 | 2 | Gradient Boosting (default) | 0.991 | 0.889 | 0.824 | 0.855 | 0.985 |
 | 3 | XGBoost (reg) | 0.990 | 0.887 | 0.809 | 0.846 | 0.983 |
 | 4 | LR-Poly (reg) | 0.910 | 0.260 | 0.897 | 0.403 | 0.968 |
@@ -702,16 +702,16 @@ Test set: 2.000 baris, distribusi asli (~68 failure). Metrik utama untuk kesimpu
 1. **Mengapa Accuracy semua tree ~0.99?**  
    Kelas Normal mendominasi (~96.6%). Accuracy tinggi **tidak** berarti model bagus untuk PdM; yang relevan adalah deteksi Failure (Recall/Precision/F1).
 
-2. **Mengapa Random Forest F1 & AUC tertinggi di Main?**  
-   - Bagging mengurangi varians dibanding boosting yang terlalu agresif pada SMOTE.  
-   - Tanpa double-balancing, Precision tetap tinggi (0.903) sambil mempertahankan Recall 0.824.  
-   - AUC 0.988 menunjukkan ranking probabilitas Failure paling baik di antara model utama.
+2. **Mengapa Random Forest F1 & AUC tertinggi di Main — dan juga overall vs LightGBM?**  
+   - Tahap 2 (Block 11): `max_samples=0.7` (subsample bagging) + **soft-vote RF-dominated** (RF + sklearn GB + ExtraTrees, bobot 2-1-1), dipilih dari **F1 validation** (Val F1 vote 0.938 > LightGBM 0.909).  
+   - Soft-vote menekan false positive (Precision 0.965) dengan sedikit trade-off Recall (0.809).  
+   - AUC 0.988 tetap tertinggi; F1@0.5 **0.880** mengungguli LightGBM default (0.877).
 
-3. **Mengapa Recall RF = Recall GB (0.824)?**  
-   Keduanya menangkap jumlah Failure yang sama di threshold 0.5 pada test ini. Perbedaan kualitas ada di **Precision/F1/AUC**: RF lebih sedikit false alarm relatif terhadap keseimbangan F1, dan ranking skornya lebih baik (AUC).
+3. **Mengapa Recall RF sedikit di bawah GB (0.809 vs 0.824)?**  
+   Ensemble RF vote lebih konservatif (lebih sedikit false alarm). Perbedaan kualitas ada di **Precision/F1/AUC**: RF F1 0.880 vs GB 0.855.
 
-4. **Mengapa Gradient Boosting tetap sangat dekat (F1 0.855)?**  
-   Default sklearn GB (`depth` rendah, learning rate moderat) secara alami mirip konfigurasi “jinak”. Itu sebabnya di eksperimen awal GB terlihat unggul saat XGB/RF masih overfit SMOTE. Setelah mitigasi, RF menyusul/mengungguli tipis.
+4. **Mengapa Gradient Boosting tetap kompetitor dekat (F1 0.855)?**  
+   Default sklearn GB (`depth` rendah, learning rate moderat) secara alami mirip konfigurasi “jinak”. Setelah RF++ (vote), jarak F1 melebar (0.880 vs 0.855) terutama karena Precision RF lebih tinggi.
 
 5. **Mengapa XGBoost F1 0.846 (bukan 0.707 lagi)?**  
    Mitigasi berhasil: tidak lagi hafal SMOTE. F1 naik dari ~0.71 → ~0.85 karena Precision pulih (dulu ~0.60 akibat terlalu banyak prediksi Failure).
@@ -720,7 +720,7 @@ Test set: 2.000 baris, distribusi asli (~68 failure). Metrik utama untuk kesimpu
    `class_weight=balanced` + batas keputusan linear/poly membuat model sering memprediksi Failure → banyak **false positive** → Precision anjlok (0.26). Cocok sebagai baseline, tidak untuk produksi.
 
 7. **Threshold dari validation (kolom Threshold di eksperimen)**  
-   Optimasi threshold di val (~34 failure) tidak stabil; untuk RF, F1@0.5 (0.862) justru sedikit lebih baik dari F1 di thr val 0.575 (0.857). Karena itu kesimpulan produksi memakai **F1@0.5**.
+   Optimasi threshold di val (~34 failure) tidak stabil. Kesimpulan produksi memakai **F1@0.5**.
 
 Gambar: `fig12_confusion_matrices.png`, `main_models_vs_gb.csv`.
 
@@ -761,12 +761,11 @@ Pemenang: **Random Forest (reg)** — lihat Tabel 3.3.
 | 7 | SVM | 0.451 | **0.882** | 0.303 | 0.972 | `class_weight=balanced` → Recall tinggi, Precision hancur (banyak false alarm) |
 | 8 | KNN | 0.374 | 0.250 | 0.739 | 0.864 | Jarak di ruang fitur + imbalance → banyak Failure terlewat |
 
-**Mengapa LightGBM bisa “menang F1 global” tetapi tidak menggantikan kesimpulan Assignment?**
+**Overall (panel C):** setelah RF++ (subsample + vote), **Random Forest (reg) F1 0.880 mengungguli LightGBM default 0.877** pada test hold-out yang sama. LightGBM tetap terbaik di kelompok Extended (default), tetapi bukan pemenang global.
 
-1. LightGBM masuk kelompok **Extended (default)**; RF adalah **Main (tuned anti-overfit)**. Perbandingan belum apple-to-apple.  
-2. Selisih F1 LightGBM vs RF hanya ~0.015 pada **~68 failure** → sensitif 1–2 kesalahan prediksi.  
-3. RF tetap unggul **AUC (0.988 vs 0.984)** dan merupakan jawaban hipotesis utama (XGB vs RF vs LR).  
-4. Best practice laporan: LightGBM = **temuan future work** (wajib di-tune setara sebelum diklaim superior).
+1. RF vote dipilih dari **Val F1** (0.938 vs LightGBM 0.909) — bukan di-tune ke test.  
+2. Selisih F1 kecil (~0.003; ~68 failure) → 1 prediksi bisa membalik ranking; RF juga unggul AUC (0.988 vs 0.984) dan Precision (0.965 vs 0.919).  
+3. LightGBM default tetap relevan sebagai kompetitor boosting; future work: tuning setara lalu McNemar vs RF vote.
 
 Gambar: `fig16_main_models.png`, `fig16_extended_models.png`, `fig16_all_models_comparison.png`.
 
@@ -818,8 +817,8 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 ## **3.8 Kesimpulan Bab 3 (untuk Sistem Predictive Maintenance)**
 
-1. **Model produksi dalam skema penelitian ini: Random Forest (reg).**  
-   Alasan: F1@0.5 tertinggi di model utama (0.862), ROC-AUC tertinggi (0.988), Precision tinggi (0.903) dengan Recall 0.824 — seimbang untuk early warning tanpa false alarm berlebihan.
+1. **Model produksi dalam skema penelitian ini: Random Forest (reg)** (subsample bagging + soft-vote RF-dominated).  
+   Alasan: F1@0.5 tertinggi overall (0.880, di atas LightGBM 0.877), ROC-AUC tertinggi (0.988), Precision 0.965 dengan Recall 0.809 — false alarm lebih rendah untuk early warning.
 
 2. **Gradient Boosting** adalah kompetitor terdekat (F1 0.855; Recall sama). McNemar tidak signifikan → setara statistik; RF dipilih karena F1@0.5 & AUC sedikit lebih baik.
 
@@ -827,7 +826,7 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 4. **LR-Poly** tetap underfit untuk produksi (F1 0.40) meski Recall tinggi — Precision terlalu rendah.
 
-5. **LightGBM (default)** mencatat F1 tertinggi di extended (0.877). Ini **bukan** mengganti kesimpulan Assignment, melainkan peluang **future work** dengan tuning setara.
+5. **LightGBM (default)** tetap terbaik di kelompok Extended (F1 0.877), tetapi **kalah F1 overall** dari RF vote (0.880). Tuning setara LightGBM tetap future work.
 
 6. **SMOTE 0.2** terbukti pilihan terbaik untuk RF pada sensitivitas rasio.
 
@@ -863,7 +862,7 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 ## **3.11 Tabel Referensi Algoritma (literatur — tetap relevan)**
 
-Tabel referensi studi sebelumnya (Al Mamlook, Sakmar, Cioch, dll.) tetap dapat digunakan sebagai konteks literatur. Yang berubah adalah **klaim hasil empiris studi ini**: pemenang Main = **Random Forest (reg)**; temuan Extended menonjol = **LightGBM (default)**.
+Tabel referensi studi sebelumnya (Al Mamlook, Sakmar, Cioch, dll.) tetap dapat digunakan sebagai konteks literatur. Yang berubah adalah **klaim hasil empiris studi ini**: pemenang Main dan overall = **Random Forest (reg)**; terbaik Extended (default) = **LightGBM**.
 
 ---
 
