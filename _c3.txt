@@ -1,0 +1,16 @@
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+# Plot 1: Machine failure distribution
+sns.countplot(x='Machine failure', data=df, palette='Set2', ax=axes[0])
+axes[0].set_title('Distribusi Kelas Target: Machine Failure')
+axes[0].bar_label(axes[0].containers[0])
+
+# Plot 2: Failure mode frequencies
+failure_modes = df[['TWF','HDF','PWF','OSF','RNF']].sum()
+failure_modes.sort_values().plot(kind='barh', color='coral', ax=axes[1])
+axes[1].set_title('Frekuensi per Failure Mode')
+for container in axes[1].containers:
+    axes[1].bar_label(container, fmt='%d', padding=5)
+plt.tight_layout()
+plt.savefig('fig1_target_distribution.png', dpi=150)
+plt.show()
