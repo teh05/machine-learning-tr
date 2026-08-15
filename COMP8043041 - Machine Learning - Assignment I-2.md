@@ -122,7 +122,7 @@ dasar kebijakan maintenance berbasis risiko
 
 6. **Baseline** : Logistic Regression 
 
-7. **Evaluasi** : Accuracy, Precision, Recall, F1-Score, ROC-AUC 
+7. **Evaluasi** : F1-Score (utama), Recall, Precision, ROC-AUC, Accuracy (pelengkap), Confusion Matrix — sesuai praktik evaluasi PdM pada data imbalanced (Çınar et al., 2020; Alnahhal et al., 2026)
 
 8 | P a g e 
 
@@ -599,19 +599,32 @@ ses Semua model siap digunakan pada Assignment II XGBoost scale_pos_ weight: 28.
 
 ## **Rencana Evaluasi Model (Assignment II)** 
 
+Pada studi *predictive maintenance* berbasis klasifikasi biner *Machine failure* (AI4I 2020), pemilihan metrik harus selaras dengan ketidakseimbangan kelas ekstrem (~3,4% failure) dan biaya kesalahan operasional. Literatur PdM Industri 4.0 menekankan bahwa Accuracy saja dapat menyesatkan (*accuracy paradox*) karena model yang selalu memprediksi Normal tetap tampak akurat (Çınar et al., 2020; Yang & Iqbal, 2025). Oleh karena itu, evaluasi model yang diusulkan (Random Forest / RF vote) mengutamakan **F1-Score**, dilengkapi **Recall**, **Precision**, **ROC-AUC**, serta confusion matrix sebagai evidence operasional (Alnahhal et al., 2026; Serradilla et al., 2022).
+
 **Tabel 17. Metrik Evaluasi dan Prioritas Konteks Manufaktur** 
 
-|**Metrik**|**Formula**|**Prioritas**|**Justifikasi Konteks Manufaktur**|
+|**Metrik**|**Formula**|**Prioritas**|**Justifikasi Konteks Manufaktur & Landasan Ilmiah**|
 |---|---|---|---|
-|**Recall**|TP/(TP+FN)|⭐⭐⭐<br>Tertinggi|False Negative = kegagalan mesin tidak terdeteksi = downtime total + biaya<br>darurat sangat besar|
-|**F1-Score**|2×(P×R)/(P+R)|⭐⭐⭐|Keseimbangan mendeteksi kegagalan vs meminimalkan false alarm|
-|**ROC-**<br>**AUC**|Area under<br>ROC|⭐⭐|Kemampuan diskriminasi model secara keseluruhan|
-|**Precision**|TP/(TP+FP)|⭐⭐|False Positive = false alarm = inspeksi tidak perlu, membuang jam produksi|
-|**Accuracy**|(TP+TN)/Total|⭐|Tidak representatif karena imbalanced ekstrem (~96% normal)|
+|**F1-Score**|2×(P×R)/(P+R)|⭐⭐⭐ **Utama**|Menyeimbangkan deteksi Failure vs false alarm; dipakai sebagai skor tuning & ranking model (Alnahhal et al., 2026)|
+|**Recall**|TP/(TP+FN)|⭐⭐⭐|FN = kegagalan tidak terdeteksi → downtime darurat; kritis untuk early warning (Çınar et al., 2020; Abidi et al., 2022)|
+|**Precision**|TP/(TP+FP)|⭐⭐|FP = false alarm → inspeksi sia-sia; indikator anti-overfit & kualitas SMOTE (Alnahhal et al., 2026)|
+|**ROC-AUC**|Area under ROC|⭐⭐|Kualitas ranking skor probabilitas Failure antar threshold (Serradilla et al., 2022; Dale Luche et al., 2026)|
+|**Accuracy**|(TP+TN)/Total|⭐|Pelengkap saja; tidak representatif pada imbalance ~96% Normal (Yang & Iqbal, 2025)|
+|**Confusion Matrix**|TP/FP/TN/FN|⭐⭐|Interpretasi operasional jumlah alarm benar/salah di test hold-out (Çınar et al., 2020)|
 
+### **Landasan singkat penggunaan metrik**
 
+1. **F1-Score sebagai keputusan produksi.** Pada data imbalanced, F1 menangkap trade-off Precision–Recall secara lebih adil daripada Accuracy, sehingga menjadi metrik utama pemilihan model dan hyperparameter search (Alnahhal et al., 2026; Yang & Iqbal, 2025). Dalam eksperimen ini, kesimpulan Assignment memakai **F1@0.5**.
 
-**Mengapa Recall diutamakan?** Dalam konteks manufaktur, melewatkan satu prediksi kegagalan mesin ( _false negative_ ) dapat berarti mesin beroperasi menuju kerusakan total yang membutuhkan penggantian komponen besar dan menghentikan seluruh lini produksi selama berhari-hari. Biaya _false negative_ di industri manufaktur jauh melampaui biaya _false positive_ berupa inspeksi yang ternyata tidak diperlukan.[2] 
+2. **Recall untuk fungsi early warning.** Melewatkan kegagalan mesin (FN) berisiko downtime total dan biaya perbaikan darurat yang jauh lebih besar daripada biaya inspeksi false alarm; Recall tinggi mendukung tujuan PdM berkelanjutan di Industri 4.0 (Çınar et al., 2020; Abidi et al., 2022).
+
+3. **Precision untuk kendali false alarm.** Model yang terlalu agresif ke kelas Failure (misalnya akibat *double-balancing* SMOTE + class weight) menurunkan Precision; Precision tinggi menandakan alarm lebih dapat dipercaya teknisi (Alnahhal et al., 2026).
+
+4. **ROC-AUC sebagai pelengkap ranking risiko.** ROC-AUC menilai kemampuan diskriminasi skor Failure lintas threshold dan berguna saat F1 antar model berdekatan; tetap dilengkapi F1/PR karena pada imbalance ekstrem fokus pada kelas minoritas lebih relevan secara operasional (Serradilla et al., 2022; Dale Luche et al., 2026).
+
+5. **Accuracy hanya deskriptif.** Accuracy tinggi (~0,99) mudah dicapai tanpa mendeteksi Failure; literatur PdM memperingatkan agar Accuracy tidak dijadikan klaim keunggulan model (Yang & Iqbal, 2025; Alnahhal et al., 2026).
+
+**Ringkas:** model proposed dievaluasi dengan **F1@0.5 sebagai metrik utama**, **Recall & Precision sebagai kendala operasional**, **ROC-AUC sebagai bukti ranking risiko**, serta Accuracy hanya sebagai laporan deskriptif.
 
 32 | P a g e 
 
@@ -761,11 +774,11 @@ Pemenang: **Random Forest (reg)** — lihat Tabel 3.3.
 | 7 | SVM | 0.451 | **0.882** | 0.303 | 0.972 | `class_weight=balanced` → Recall tinggi, Precision hancur (banyak false alarm) |
 | 8 | KNN | 0.374 | 0.250 | 0.739 | 0.864 | Jarak di ruang fitur + imbalance → banyak Failure terlewat |
 
-**Overall (panel C):** setelah RF++ (subsample + vote), **Random Forest (reg) F1 0.880 mengungguli LightGBM default 0.877** pada test hold-out yang sama. LightGBM tetap terbaik di kelompok Extended (default), tetapi bukan pemenang global.
+**Overall (panel C):** setelah RF++ (subsample + vote), **Random Forest (reg) F1 0.880 mengungguli LightGBM default 0.877** pada test hold-out yang sama. LightGBM tetap terbaik di kelompok Extended (default), tetapi bukan pemenang global. Temuan ini menegaskan pentingnya evaluasi multi-metrik dan konfigurasi setara antar model pada data AI4I yang imbalanced (Alnahhal et al., 2026; Kareem, 2024).
 
 1. RF vote dipilih dari **Val F1** (0.938 vs LightGBM 0.909) — bukan di-tune ke test.  
 2. Selisih F1 kecil (~0.003; ~68 failure) → 1 prediksi bisa membalik ranking; RF juga unggul AUC (0.988 vs 0.984) dan Precision (0.965 vs 0.919).  
-3. LightGBM default tetap relevan sebagai kompetitor boosting; future work: tuning setara lalu McNemar vs RF vote.
+3. LightGBM default tetap relevan sebagai kompetitor boosting; future work: tuning setara lalu uji statistik vs RF vote (Alnahhal et al., 2026).
 
 Gambar: `fig16_main_models.png`, `fig16_extended_models.png`, `fig16_all_models_comparison.png`.
 
@@ -815,12 +828,20 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 ---
 
-## **3.8 Kesimpulan Bab 3 (untuk Sistem Predictive Maintenance)**
+## **3.8 Discussion, Finding, and Proposed Model**
+
+Hasil eksperimen menunjukkan bahwa prediksi *machine failure* pada AI4I 2020 sangat dipengaruhi penanganan ketidakseimbangan dan kontrol overfitting. Setelah SMOTE dibatasi pada `sampling_strategy=0.2` tanpa *double-balancing*, model tree tidak lagi “menghafal” data sintetis: gap Train–Val XGBoost menyusut drastis, sementara Random Forest menjadi pemenang skema utama dan overall (F1@0.5 ≈ 0,880; ROC-AUC ≈ 0,988) mengungguli Gradient Boosting, XGBoost yang sudah diregularisasi, serta LightGBM default (F1 ≈ 0,877). Temuan ini selaras dengan literatur bahwa strategi imbalance dan konfigurasi model pada AI4I bersifat sensitif—tidak ada satu pendekatan yang selalu unggul di semua metrik—sehingga evaluasi multi-metrik (F1, Recall, Precision, AUC) diperlukan (Alnahhal et al., 2026; Kareem, 2024). Temuan penting lainnya adalah sensitivitas rasio SMOTE: rasio lebih agresif (0,5–1,0) justru menurunkan Precision karena false alarm naik, mendukung praktik PdM yang menyeimbangkan deteksi Failure dengan kendali false alarm (Çınar et al., 2020; Yang & Iqbal, 2025). Soft-vote RF-dominated (RF + GB + ExtraTrees, bobot 2-1-1) dengan subsample bagging (`max_samples=0.7`), dipilih dari F1 validation, menaikkan Precision (~0,965) dengan sedikit trade-off Recall (~0,809)—cocok untuk early warning yang ingin menekan false alarm. McNemar terhadap GB/XGB umumnya tidak signifikan, sehingga keunggulan RF bersifat praktis (F1/AUC/Precision). Explainability SHAP mengonfirmasi sinyal domain (RPM, Strain, Power, Temp_diff, Tool wear), konsisten dengan kebutuhan interpretabilitas PdM untuk keputusan perawatan (Brito et al., 2024; Matzka, 2020).
+
+**Model yang diusulkan** untuk sistem *predictive maintenance* pada studi ini adalah **Random Forest (reg) berbasis pipeline anti-overfit**: feature engineering domain (Power, Strain, Temp_diff), Winsorization, stratified split, SMOTE 0,2 hanya pada training, seleksi kandidat RF via validation asli, serta soft-vote RF-dominated untuk produksi. Logistic Regression–Polynomial dipertahankan sebagai baseline underfit; LightGBM/CatBoost dicatat sebagai kandidat masa depan yang wajib di-tune setara sebelum diklaim superior (Kareem, 2024; Alnahhal et al., 2026). Usulan ini menempatkan RF sebagai *early-warning classifier* yang menyeimbangkan Recall dan Precision, dilengkapi monitoring threshold dan interpretasi SHAP untuk mendukung keputusan perawatan berkelanjutan di Industri 4.0 (Abidi et al., 2022; Çınar et al., 2020).
+
+---
+
+## **3.9 Kesimpulan Bab 3 (untuk Sistem Predictive Maintenance)**
 
 1. **Model produksi dalam skema penelitian ini: Random Forest (reg)** (subsample bagging + soft-vote RF-dominated).  
    Alasan: F1@0.5 tertinggi overall (0.880, di atas LightGBM 0.877), ROC-AUC tertinggi (0.988), Precision 0.965 dengan Recall 0.809 — false alarm lebih rendah untuk early warning.
 
-2. **Gradient Boosting** adalah kompetitor terdekat (F1 0.855; Recall sama). McNemar tidak signifikan → setara statistik; RF dipilih karena F1@0.5 & AUC sedikit lebih baik.
+2. **Gradient Boosting** adalah kompetitor terdekat (F1 0.855). McNemar tidak signifikan → setara statistik; RF dipilih karena F1@0.5 & AUC sedikit lebih baik.
 
 3. **XGBoost (reg)** sudah keluar dari overfit parah (gap Train–Val 0.018; F1 test 0.846) dan layak sebagai alternatif.
 
@@ -834,13 +855,13 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 ---
 
-## **3.9 Kelemahan dan Keterbatasan (diperbarui)**
+## **3.10 Kelemahan dan Keterbatasan (diperbarui)**
 
 ### **Keterbatasan yang masih berlaku**
-- Dataset AI4I bersifat **sintetis**.  
-- Failure di test hanya ~**68** kasus → metrik F1 sensitif.  
+- Dataset AI4I bersifat **sintetis** (Matzka, 2020); generalisasi ke sensor riil masih terbuka (Azari et al., 2023).  
+- Failure di test hanya ~**68** kasus → metrik F1 sensitif (Alnahhal et al., 2026).  
 - Extended models (termasuk LightGBM) **belum** di-tune setara Main.  
-- Val set kecil (~34 failure) membuat threshold-from-val kurang stabil.
+- Val set kecil (~34 failure) membuat threshold-from-val kurang stabil (Dale Luche et al., 2026).
 
 ### **Keterbatasan lama yang sudah dijawab oleh eksperimen ini**
 - ~~Mitigasi overfit belum diuji~~ → **sudah** (gap XGB 0.28 → 0.018; F1 XGB 0.71 → 0.85).  
@@ -850,24 +871,74 @@ Gambar: `fig22_shap_summary_rf.png`, `fig22_shap_bar_rf.png`.
 
 ---
 
-## **3.10 Future Works (revisi prioritas)**
+## **3.11 Future Works**
 
-1. **Tuning setara LightGBM/CatBoost** lalu bandingkan head-to-head dengan RF (termasuk McNemar).  
-2. Kalibrasi probabilitas + kebijakan threshold berbasis biaya FN vs FP di pabrik.  
-3. Multi-class failure modes (TWF/HDF/PWF/OSF/RNF).  
-4. Validasi pada data sensor riil / shift domain.  
-5. Deployment end-to-end (API inferensi, dashboard, alerting) untuk Final Project (AOL).
+Pengembangan selanjutnya disusun berdasarkan temuan dan keterbatasan eksperimen, dengan landasan literatur PdM/AI4I periode 2020–2026.
+
+1. **Tuning setara LightGBM/CatBoost vs RF vote.**  
+   *Alasan:* LightGBM default hampir menyamai RF (F1 0,877 vs 0,880) tetapi belum di-tune apple-to-apple; hasil AI4I sangat bergantung pada konfigurasi model dan strategi imbalance (Alnahhal et al., 2026; Kareem, 2024).  
+   *Arah:* grid/PredefinedSplit setara + McNemar/bootstrap CI pada F1.
+
+2. **Eksplorasi strategi imbalance lanjutan.**  
+   *Alasan:* Hanya rasio SMOTE yang diuji; class weighting, selective oversampling, atau tanpa oversampling belum dibandingkan sistematis, padahal literatur menunjukkan tidak ada satu strategi yang unggul di semua moda/metrik (Alnahhal et al., 2026).  
+   *Arah:* eksperimen factorial anti-leakage (oversampling hanya di training).
+
+3. **Multi-class / multi-label failure modes (TWF, HDF, PWF, OSF, RNF).**  
+   *Alasan:* Model final masih biner, sementara kebijakan maintenance membutuhkan jenis kerusakan; moda jarang (TWF/RNF) sulit terdeteksi bahkan oleh model kuat (Alnahhal et al., 2026; Matzka, 2020).  
+   *Arah:* multilabel/multiclass + macro-F1 / per-class Recall.
+
+4. **Validasi data riil / transfer learning.**  
+   *Alasan:* AI4I sintetis; performa hold-out belum menjamin generalisasi ke noise sensor, drift, dan kondisi operasi berbeda (Azari et al., 2023; Serradilla et al., 2022; Çınar et al., 2020).  
+   *Arah:* external validation atau transfer learning AI4I → data mesin riil.
+
+5. **Kalibrasi probabilitas + threshold berbasis biaya FN/FP.**  
+   *Alasan:* Val kecil membuat thr-from-val tidak stabil; di pabrik biaya FN ≠ FP, sehingga F1@0.5 belum tentu optimal bisnis (Dale Luche et al., 2026; Yang & Iqbal, 2025; Abidi et al., 2022).  
+   *Arah:* kalibrasi + expected-cost threshold.
+
+6. **Dari SHAP ke aksi maintenance (XAI operasional).**  
+   *Alasan:* SHAP sudah mengidentifikasi fitur penting, tetapi belum menjadi SOP inspeksi/spare-part (Brito et al., 2024; Taoufyq et al., 2025).  
+   *Arah:* SHAP lokal per alarm + rule overlay zona gagal EDA.
+
+7. **Deployment end-to-end (Final Project / AOL).**  
+   *Alasan:* Assignment berhenti di evaluasi offline; PdM Industri 4.0 membutuhkan integrasi inferensi, alerting, dan monitoring (Çınar et al., 2020; Taoufyq et al., 2025).  
+   *Arah:* API, dashboard, model registry, human-in-the-loop.
 
 ---
 
-## **3.11 Tabel Referensi Algoritma (literatur — tetap relevan)**
+## **3.12 Catatan Literatur Algoritma**
 
-Tabel referensi studi sebelumnya (Al Mamlook, Sakmar, Cioch, dll.) tetap dapat digunakan sebagai konteks literatur. Yang berubah adalah **klaim hasil empiris studi ini**: pemenang Main dan overall = **Random Forest (reg)**; terbaik Extended (default) = **LightGBM**.
+Klaim empiris studi ini: pemenang Main dan overall = **Random Forest (reg)**; terbaik Extended (default) = **LightGBM**. Perbandingan RF vs boosting modern pada PdM tetap relevan sebagai konteks literatur (Kareem, 2024; Alnahhal et al., 2026).
 
 ---
 
 
-### **Referensi:** 
+### **Referensi (APA 7th Edition — fokus sitasi teori & pembahasan 2020–2026)**
+
+Abidi, M. H., Mohammed, M. K., & Alkhalefah, H. (2022). Predictive maintenance planning for Industry 4.0 using machine learning for sustainable manufacturing. *Sustainability, 14*(6), Article 3387. https://doi.org/10.3390/su14063387
+
+Alnahhal, M., Tabash, M. I., Safi, S. K., Absy, M. S. M., & Mamadiyarov, Z. (2026). A comparative study of imbalance-handling methods in multiclass predictive maintenance. *Computation, 14*(4), Article 88. https://doi.org/10.3390/computation14040088
+
+Azari, M. S., Flammini, F., Santini, S., & Caporuscio, M. (2023). A systematic literature review on transfer learning for predictive maintenance in Industry 4.0. *IEEE Access, 11*, 12887–12910. https://doi.org/10.1109/ACCESS.2023.3239784
+
+Brito, L. C., Susto, G. A., Brito, J. N., & Duarte, M. A. V. (2024). Explainable predictive maintenance of rotating machines using LIME, SHAP, PDP, ICE. *IEEE Access, 12*, 28525–28548. https://doi.org/10.1109/ACCESS.2024.3367110
+
+Çınar, Z. M., Abdussalam Nuhu, A., Zeeshan, Q., Korhan, O., Asmael, M., & Safaei, B. (2020). Machine learning in predictive maintenance towards sustainable smart manufacturing in Industry 4.0. *Sustainability, 12*(19), Article 8211. https://doi.org/10.3390/su12198211
+
+Dale Luche, J. R., Goussain, B. G. C. dos S., & de Freitas, C. R. (2026). Robust baselines and probability calibration for TPM-oriented predictive maintenance. *International Journal of Prognostics and Health Management, 17*(1). https://doi.org/10.36001/ijphm.2026.v17i1.4659
+
+Kareem, A. (2024). Comparative analysis of XGBoost and random forest for predictive maintenance. *Annals of the Faculty of Engineering Hunedoara, 22*(4), 113–120.
+
+Matzka, S. (2020). *AI4I 2020 predictive maintenance dataset* [Data set]. UCI Machine Learning Repository. https://doi.org/10.24432/C5HS5C
+
+Serradilla, O., Zugasti, E., Rodriguez, J., & Zurutuza, U. (2022). Deep learning models for predictive maintenance: A survey, comparison, challenges and prospects. *Applied Intelligence, 52*(10), 10934–10964. https://doi.org/10.1007/s10489-021-03004-y
+
+Taoufyq, H., El Guemmat, K., Mansouri, K., & Akef, F. (2025). Predictive maintenance approaches: A systematic literature review. *Journal of Industrial Engineering and Management, 18*(3), 427–458. https://doi.org/10.3926/jiem.8537
+
+Yang, Y., & Iqbal, M. Z. (2025). Cost-optimised machine learning model comparison for predictive maintenance. *Electronics, 14*(12), Article 2497. https://doi.org/10.3390/electronics14122497
+
+---
+
+### **Referensi tambahan (sumber laporan sebelumnya):** 
 
 [1] S.Nangia, S. Makkar, and R.Hassan, "IoT based predictive maintenance in manufacturing sector," SSRN Electronic Journal, 2020. [Online]. Available: 
 
